@@ -28,3 +28,9 @@ jobs:
         run: |
           cd build
           ./tests
+        env:
+          FIX_ACCESS_KEY: ${{ secrets.FIX_ACCESS_KEY }}
+          FIX_ACCESS_SECRET: ${{ secrets.FIX_ACCESS_SECRET }}
+          FIX_TARGET_COMP_ID: ${{ secrets.FIX_TARGET_COMP_ID }}
+          FIX_ENDPOINT_HOST: ${{ secrets.FIX_ENDPOINT_HOST }}
+          FIX_ENDPOINT_PORT: ${{ secrets.FIX_ENDPOINT_PORT }}
