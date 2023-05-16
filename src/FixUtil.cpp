@@ -10,6 +10,8 @@
 #include <chrono>
 #include <random>
 #include <iomanip>
+#include <regex>
+
 
 static std::string generate_nonce(size_t length) {
     std::random_device rd;
@@ -84,7 +86,7 @@ static std::string current_utc_time() {
     return ss.str();
 }
 
-static std::map<uint32_t, std::string> ParseFixMessage(const std::string& message) {
+static std::map<uint32_t, std::string> parse_fix_message(const std::string& message) {
     std::map<uint32_t, std::string> parsed_message;
 
     std::stringstream ss(message);
@@ -107,4 +109,10 @@ static std::string generate_password(const std::string& raw_data, const std::str
     std::string combined = raw_data + access_secret;
     std::string hashed = sha256_hash(combined);
     return base64_encode(hashed);
+}
+
+static std::string set_message_sequence_number(int seq_num, const std::string& message) {
+    std::string seq_num_field = "34=" + std::to_string(seq_num) + '\x01';
+    std::regex seq_num_regex("34=[0-9]+\x01");
+    return std::regex_replace(message, seq_num_regex, seq_num_field);
 }

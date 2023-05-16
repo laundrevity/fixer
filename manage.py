@@ -74,8 +74,8 @@ def build() -> bool:
 
         _build_success = config_result.returncode == 0 and build_result.returncode == 0
         if not _build_success:
-            config_msg = f"stdout:\n{config_result.stdout}\nstderr:\n"
-            build_msg = f"stdout:\n{build_result.stdout}\nstderr:\n"
+            config_msg = f"stdout:\n{config_result.stdout}\nstderr:{config_result.stderr}\n"
+            build_msg = f"stdout:\n{build_result.stdout}\nstderr:{build_result.stderr}\n"
         else:
             config_msg = ''
             build_msg = ''

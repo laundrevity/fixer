@@ -1,5 +1,6 @@
 #include "FixSession.h"
 #include "LogonMessage.h"
+#include "NewOrderSingle.h"
 #include "FixUtil.cpp"
 #include <iostream>
 #include <cstdlib>
@@ -17,11 +18,16 @@ int main() {
         exit(1);
     }
 
-    if (fix_session.logon()) {
-        std::cout << "Logged on successfully" << std::endl;
-    } else {
-        std::cout << "Logon failed" << std::endl;
+    if (!fix_session.logon()) {
+        std::cout << "Log on failed" << std::endl;
+        return 1;
     }
+
+    auto order = NewOrderSingle("clordid", 1, 100.0, 15000.0, "BTC-PERPETUAL");
+    fix_session.send_order(order);
+
+    // wait for an ack
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
     fix_session.disconnect();
     return 0;

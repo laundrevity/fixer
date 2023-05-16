@@ -18,7 +18,17 @@ FixSession::FixSession(const std::string &access_key, const std::string &access_
     , target_comp_id_(target_comp_id)
     , host_(host)
     , port_(port)
-    , sockfd_(-1) {}
+    , sockfd_(-1)
+    , running_(true) {
+    sender_receiver_thread_ = std::thread(&FixSession::sender_receiver_loop, this);
+}
+
+FixSession::~FixSession() {
+    running_ = false;
+    cv_.notify_all();
+    sender_receiver_thread_.join();
+    disconnect();
+}
 
 bool FixSession::logon() {
     size_t nonce_length = 32;
@@ -37,55 +47,44 @@ bool FixSession::logon() {
             raw_data
     );
 
-    if (sockfd_ < 0) {
-        std::cout << "Disconnected, trying to connect again...";
-        if (!connect_to_server()) {
-            std::cout << "Failed to connect, aborting send" << std::endl;
-            return false;
+    bool logon_success = false;
+    std::mutex logon_mutex;
+    std::condition_variable logon_cv;
+
+    send_message_and_get_reply(logon_message.to_string(), [&](const std::map<uint32_t, std::string>& response) {
+        auto response_type_it = response.find(35);
+        if (response_type_it != response.end()) {
+            logon_success = response_type_it->second == "A";
         }
-    }
+        std::unique_lock<std::mutex> lock(logon_mutex);
+        logon_cv.notify_all();
+    });
+    ++seq_num_;
+    std::unique_lock<std::mutex> lock(logon_mutex);
+    logon_cv.wait(lock);
 
-    auto reply = send_message_and_get_reply(logon_message.to_string());
-
-    auto response_type_it = reply.find(35);
-
-    if (response_type_it != reply.end()) {
-        return response_type_it->second == "A";
-    } else {
-        std::cout << "Got reply without a message type" << std::endl;
-        return false;
-    }
+    return true;
 
 }
 
-std::map<uint32_t, std::string> FixSession::send_message_and_get_reply(const std::string& message) {
-    if (sockfd_ < 0) {
-        std::cout << "Disconnected, trying to logon again...";
-        if (!connect_to_server()) {
-            std::cout << "Failed to reconnect, aborting send" << std::endl;
-            return std::map<uint32_t, std::string>{};
+void FixSession::send_message_and_get_reply(const std::string& message, const ResponseCallback& callback) {
+    std::unique_lock<std::mutex> lock(submission_mutex_);
+
+    // Set the sequence number for the message
+    std::cout << "Submitting message to queue: " << message << std::endl;
+    submission_queue_.push(QueueEntry{message, callback});
+    cv_.notify_all();
+}
+
+void FixSession::send_order(const NewOrderSingle& order) {
+    send_message_and_get_reply(order.to_string(), [&](const std::map<uint32_t, std::string>& response) {
+        // Handle the response here
+        auto it = response.begin();
+        while (it != response.end()) {
+            std::cout << it->first << "=" << it->second << std::endl;
+            ++it;
         }
-    }
-
-    ssize_t bytes_sent = send(sockfd_, message.c_str(), message.size(), 0);
-    if (bytes_sent != static_cast<ssize_t>(message.size())) {
-        std::cerr << "Error sending message" << std::endl;
-        close(sockfd_);
-        return std::map<uint32_t, std::string>{};
-    }
-
-    char buffer[4096];
-    ssize_t bytes_received = recv(sockfd_, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received <= 0) {
-        std::cerr << "Error receiving message: " << std::endl;
-        close(sockfd_);
-        return std::map<uint32_t, std::string>{};
-    }
-
-    buffer[bytes_received] = '\0';
-
-    auto msg = ParseFixMessage(std::string(buffer));
-    return msg;
+    });
 }
 
 bool FixSession::connect_to_server() {
@@ -125,4 +124,54 @@ void FixSession::init_server_address() {
         return;
     }
     memcpy(&server_addr_.sin_addr, dns_host->h_addr, dns_host->h_length);
+}
+
+void FixSession::sender_receiver_loop() {
+    while (running_) {
+        std::unique_lock<std::mutex> submission_lock(submission_mutex_);
+        cv_.wait(submission_lock, [this]() { return !submission_queue_.empty() || !running_; });
+
+        if (!running_) {
+            break;
+        }
+
+        auto entry = submission_queue_.front();
+        submission_queue_.pop();
+        submission_lock.unlock();
+
+        std::cout << "Sending message: " << entry.message << std::endl;
+
+        // Send the message over the socket
+        std::string message = entry.message;
+        ssize_t sent = send(sockfd_, message.c_str(), message.size(), 0);
+
+        if (sent < 0) {
+            std::cerr << "Error sending message" << std::endl;
+        } else {
+            // Read the response from the server
+            char buffer[4096];
+            ssize_t received = recv(sockfd_, buffer, sizeof(buffer) - 1, 0);
+            if (received > 0) {
+                buffer[received] = '\0';
+                std::string response_str(buffer);
+                std::cout << "Received response: " << response_str << std::endl;
+
+                auto parsed_response = parse_fix_message(response_str);
+
+                // Add the received message to the completion queue
+                std::unique_lock<std::mutex> completion_lock(completion_mutex_);
+                completion_queue_.push({response_str, entry.callback});
+                completion_lock.unlock();
+
+                // Execute the callback
+                entry.callback(parsed_response);
+            } else {
+                std::cerr << "Error receiving message" << std::endl;
+            }
+        }
+    }
+}
+
+void FixSession::process_response() {
+    std::cout << "got response, but unclear how to access it, I guess pop it from completion_queue?" << std::endl;
 }
