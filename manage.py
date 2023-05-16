@@ -10,6 +10,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 PROMPT_SUFFIX = ""
 SCRIPT_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 BUILD_FOLDER_PATH = os.path.join(SCRIPT_FOLDER_PATH, "build")
+SOURCE_FOLDER_PATH = os.path.join(SCRIPT_FOLDER_PATH, "src")
 
 
 def get_file_content(file_path: str):
@@ -27,10 +28,16 @@ def write_source_code():
     file_candidates = os.listdir('.') + [os.path.join(SCRIPT_FOLDER_PATH, '.github/workflows/main.yml')]
 
     for file_name in file_candidates:
-        if file_name.endswith('.py') or file_name.endswith('CMakeLists.txt') or file_name.endswith('.cpp') or file_name.endswith('.h') or file_name.endswith('requirements.txt'):
+        if file_name.endswith('.py') or file_name.endswith('CMakeLists.txt') or file_name.endswith('requirements.txt'):
             state_content += f"--- {file_name} ---"
             state_content += get_file_content(file_name)
             state_content += "\n\n"
+
+    source_files = os.listdir('src')
+    for source_file in source_files:
+        state_content += f"--- src/{source_file} ---"
+        state_content += get_file_content(os.path.join(SOURCE_FOLDER_PATH, source_file))
+        state_content += "\n\n"
 
     with open('state.txt', 'w') as f:
         f.write(state_content)
