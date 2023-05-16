@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 find_package(OpenSSL REQUIRED)
 
-add_executable(main main.cpp)
-
+add_executable(main main.cpp FixSession.cpp LogonMessage.cpp)
 target_link_libraries(main OpenSSL::Crypto)
+
+# include GTest
+add_subdirectory(external/googletest)
+enable_testing()
+
+# Create a new executable target for tests
+add_executable(tests test_main.cpp FixSession.cpp LogonMessage.cpp)
+target_link_libraries(tests gtest_main OpenSSL::Crypto)
+add_test(NAME fixer_tests COMMAND tests)
