@@ -10,7 +10,7 @@ TEST(FixMessageTests, LogonMessageSendTest) {
     std::string host = std::string(std::getenv("FIX_ENDPOINT_HOST"));
     int port = std::stoi(std::getenv("FIX_ENDPOINT_PORT"));
 
-    TestableFixSession fix_session(access_key, access_secret, target_comp_id, host, port, std::chrono::seconds(5));
+    TestableFixSession fix_session(access_key, access_secret, target_comp_id, host, port);
 
     if (!fix_session.connect_to_server()) {
         std::cout << "Failed to connect to server" << std::endl;
@@ -18,5 +18,7 @@ TEST(FixMessageTests, LogonMessageSendTest) {
     }
 
     EXPECT_TRUE(fix_session.logon());
+
+    fix_session.stop_sender_receiver_loop();
     fix_session.disconnect();
 }
