@@ -47,9 +47,22 @@ static std::string base64_encode(const std::string& input) {
 static std::string sha256_hash(const std::string& input) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256_CTX sha256;
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
     SHA256_Init(&sha256);
     SHA256_Update(&sha256, input.data(), input.size());
     SHA256_Final(hash, &sha256);
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    const EVP_MD *md = EVP_sha256();
+#else
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    const EVP_MD *md = EVP_sha256();
+
+    EVP_DigestInit_ex(mdctx, md, NULL);
+    EVP_DigestUpdate(mdctx, input.data(), input.size());
+    EVP_DigestFinal_ex(mdctx, hash, NULL);
+    EVP_MD_CTX_free(mdctx);
+#endif
 
     std::string binary_hash(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
     return binary_hash;
