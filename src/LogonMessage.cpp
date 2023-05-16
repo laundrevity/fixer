@@ -1,27 +1,12 @@
 #include "LogonMessage.h"
 #include "FixUtil.cpp"
+#include <iostream>
 
+// Modify the existing constructor to utilize the new constructor
 LogonMessage::LogonMessage(const std::string &access_key, const std::string &access_secret,
-                           const std::string &target_comp_id, const std::string &raw_data) {
-    // Add header fields
-    fields_[8] = "FIX.4.4";
-    fields_[49] = "client";
-    fields_[56] = target_comp_id;
-    fields_[34] = "1";
-    fields_[52] = current_utc_time();
+             const std::string &target_comp_id, const std::string &raw_data)
+        : LogonMessage(create_fields_map()) {}
 
-    // Add body fields
-    fields_[35] = "A";
-    fields_[98] = "0";
-    fields_[108] = "30";
-    fields_[141] = "Y";
-    fields_[96] = raw_data;
-    fields_[553] = access_key;
-
-    // Calculate and add the password
-    std::string password = generate_password(raw_data, access_secret);
-    fields_[554] = password;
-}
 
 std::string LogonMessage::to_string() const {
     std::stringstream header, body;
@@ -47,4 +32,38 @@ std::string LogonMessage::to_string() const {
     logon_message_str += checksum_field.str();
 
     return logon_message_str;
+}
+
+std::map<uint32_t, std::string>
+LogonMessage::create_fields_map() {
+    std::map<uint32_t, std::string> fields_map;
+
+    // Add header fields
+    fields_map[8] = "FIX.4.4";
+    fields_map[49] = "client";
+    fields_map[56] = std::getenv("FIX_TARGET_COMP_ID");
+    // TODO: fix this so it can work for reconnects, in which case seqnum will not be 1 for LOGON msg
+    fields_map[34] = "1";
+    fields_map[52] = current_utc_time();
+
+    // Add body fields
+    fields_map[35] = "A";
+    fields_map[98] = "0";
+    fields_map[108] = "30";
+    fields_map[141] = "Y";
+
+    size_t nonce_length = 32;
+    std::string nonce = generate_nonce(nonce_length);
+    std::string base64_nonce = base64_encode(nonce);
+
+    std::time_t timestamp = std::time(nullptr);
+    std::stringstream raw_data_ss;
+    raw_data_ss << timestamp << "." << base64_nonce;
+    std::string raw_data = raw_data_ss.str();
+
+    fields_map[96] = raw_data;
+    fields_map[553] = std::getenv("FIX_ACCESS_KEY");
+
+    fields_map[554] = generate_password(raw_data, std::getenv("FIX_ACCESS_SECRET"));
+    return fields_map;
 }

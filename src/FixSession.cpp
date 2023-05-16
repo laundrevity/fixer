@@ -11,15 +11,32 @@
 #include <chrono>
 #include <cstring>
 
+
+std::shared_ptr<Message> create_message_object(const std::map<uint32_t, std::string>& parsed_fix_message) {
+    if (parsed_fix_message.find(35) != parsed_fix_message.end()) {
+        char msg_type = parsed_fix_message.at(35)[0];
+        switch (msg_type) {
+            case 'A': // Logon
+                return std::make_shared<LogonMessage>(parsed_fix_message);
+            case 'D': // NewOrderSingle
+                return std::make_shared<NewOrderSingle>(parsed_fix_message);
+            default:
+                return nullptr;
+        }
+    }
+    return nullptr;
+}
+
 FixSession::FixSession(const std::string &access_key, const std::string &access_secret,
-                       const std::string &target_comp_id, const std::string &host, int port)
+                       const std::string &target_comp_id, const std::string &host, int port, std::chrono::milliseconds timeout)
     : access_key_(access_key)
     , access_secret_(access_secret)
     , target_comp_id_(target_comp_id)
     , host_(host)
     , port_(port)
     , sockfd_(-1)
-    , running_(true) {
+    , running_(true)
+    , timeout_(timeout) {
     sender_receiver_thread_ = std::thread(&FixSession::sender_receiver_loop, this);
 }
 
@@ -51,7 +68,7 @@ bool FixSession::logon() {
     std::mutex logon_mutex;
     std::condition_variable logon_cv;
 
-    send_message_and_get_reply(logon_message.to_string(), [&](const std::map<uint32_t, std::string>& response) {
+    send_message_and_get_reply(std::make_shared<LogonMessage>(logon_message), [&](const std::map<uint32_t, std::string>& response) {
         auto response_type_it = response.find(35);
         if (response_type_it != response.end()) {
             logon_success = response_type_it->second == "A";
@@ -67,7 +84,7 @@ bool FixSession::logon() {
 
 }
 
-void FixSession::send_message_and_get_reply(const std::string& message, const ResponseCallback& callback) {
+void FixSession::send_message_and_get_reply(const std::shared_ptr<Message>& message, const ResponseCallback& callback) {
     std::unique_lock<std::mutex> lock(submission_mutex_);
 
     // Set the sequence number for the message
@@ -76,8 +93,8 @@ void FixSession::send_message_and_get_reply(const std::string& message, const Re
     cv_.notify_all();
 }
 
-void FixSession::send_order(const NewOrderSingle& order) {
-    send_message_and_get_reply(order.to_string(), [&](const std::map<uint32_t, std::string>& response) {
+void FixSession::send_order(const std::shared_ptr<Message>& message) {
+    send_message_and_get_reply(message, [&](const std::map<uint32_t, std::string>& response) {
         // Handle the response here
         auto it = response.begin();
         while (it != response.end()) {
@@ -128,8 +145,9 @@ void FixSession::init_server_address() {
 
 void FixSession::sender_receiver_loop() {
     while (running_) {
+
         std::unique_lock<std::mutex> submission_lock(submission_mutex_);
-        cv_.wait(submission_lock, [this]() { return !submission_queue_.empty() || !running_; });
+        cv_.wait_for(submission_lock, timeout_, [this]() { return !submission_queue_.empty() || !running_; });
 
         if (!running_) {
             break;
@@ -139,10 +157,13 @@ void FixSession::sender_receiver_loop() {
         submission_queue_.pop();
         submission_lock.unlock();
 
+        // Update seq num before encoding message
+        entry.message->set_sequence_number(seq_num_++);
+        std::string message = entry.message->to_string();
+
         std::cout << "Sending message: " << entry.message << std::endl;
 
         // Send the message over the socket
-        std::string message = entry.message;
         ssize_t sent = send(sockfd_, message.c_str(), message.size(), 0);
 
         if (sent < 0) {
@@ -157,14 +178,13 @@ void FixSession::sender_receiver_loop() {
                 std::cout << "Received response: " << response_str << std::endl;
 
                 auto parsed_response = parse_fix_message(response_str);
+                auto message_object = create_message_object(parsed_response);
+                if (message_object) {
+                    std::unique_lock<std::mutex> completion_lock(completion_mutex_);
+                    completion_queue_.push({message_object, entry.callback});
+                    completion_lock.unlock();
+                }
 
-                // Add the received message to the completion queue
-                std::unique_lock<std::mutex> completion_lock(completion_mutex_);
-                completion_queue_.push({response_str, entry.callback});
-                completion_lock.unlock();
-
-                // Execute the callback
-                entry.callback(parsed_response);
             } else {
                 std::cerr << "Error receiving message" << std::endl;
             }

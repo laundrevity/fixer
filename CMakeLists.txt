@@ -15,6 +15,6 @@ add_subdirectory(external/googletest)
 enable_testing()
 
 # Create a new executable target for tests
-add_executable(tests tests/test_main.cpp src/FixSession.cpp src/LogonMessage.cpp src/NewOrderSingle.cpp)
+add_executable(tests tests/test_main.cpp src/TestableFixSession.cpp src/FixSession.cpp src/LogonMessage.cpp src/NewOrderSingle.cpp)
 target_link_libraries(tests gtest_main OpenSSL::Crypto)
 add_test(NAME fixer_tests COMMAND tests)

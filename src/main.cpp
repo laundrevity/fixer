@@ -24,7 +24,7 @@ int main() {
     }
 
     auto order = NewOrderSingle("clordid", 1, 100.0, 15000.0, "BTC-PERPETUAL");
-    fix_session.send_order(order);
+    fix_session.send_order(std::make_shared<NewOrderSingle>(order));
 
     // wait for an ack
     std::this_thread::sleep_for(std::chrono::seconds(5));

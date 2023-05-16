@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../src/FixSession.h"
+#include "../src/TestableFixSession.h"
 #include <string>
 
 
@@ -10,7 +10,7 @@ TEST(FixMessageTests, LogonMessageSendTest) {
     std::string host = std::string(std::getenv("FIX_ENDPOINT_HOST"));
     int port = std::stoi(std::getenv("FIX_ENDPOINT_PORT"));
 
-    FixSession fix_session(access_key, access_secret, target_comp_id, host, port);
+    TestableFixSession fix_session(access_key, access_secret, target_comp_id, host, port, std::chrono::seconds(5));
 
     if (!fix_session.connect_to_server()) {
         std::cout << "Failed to connect to server" << std::endl;

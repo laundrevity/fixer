@@ -11,6 +11,7 @@ PROMPT_SUFFIX = ""
 SCRIPT_FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
 BUILD_FOLDER_PATH = os.path.join(SCRIPT_FOLDER_PATH, "build")
 SOURCE_FOLDER_PATH = os.path.join(SCRIPT_FOLDER_PATH, "src")
+TEST_FOLDER_PATH = os.path.join(SCRIPT_FOLDER_PATH, "tests")
 
 
 def get_file_content(file_path: str):
@@ -37,6 +38,12 @@ def write_source_code():
     for source_file in source_files:
         state_content += f"--- src/{source_file} ---"
         state_content += get_file_content(os.path.join(SOURCE_FOLDER_PATH, source_file))
+        state_content += "\n\n"
+
+    test_files = os.listdir('tests')
+    for source_file in test_files:
+        state_content += f"--- src/{source_file} ---"
+        state_content += get_file_content(os.path.join(TEST_FOLDER_PATH, source_file))
         state_content += "\n\n"
 
     with open('state.txt', 'w') as f:
@@ -120,10 +127,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("binary", help="Binary target", type=str)
     parser.add_argument("--send", help="Send the build context and results to GPT", action="store_true")
+    parser.add_argument("--skiptests", help="Skip the tests (presumably they are failing)", action="store_true")
     args = parser.parse_args()
 
     build_success = build()
-    test_success = run_tests() if build_success else False
+
+    if args.skiptests:
+        print("skipping tests")
+        test_success = False
+    else:
+        test_success = run_tests()
 
     if args.send:
         os.chdir(SCRIPT_FOLDER_PATH)

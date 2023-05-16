@@ -10,29 +10,31 @@
 #include <mutex>
 #include <thread>
 #include <functional>
+#include <chrono>
 #include <condition_variable>
 
 typedef std::function<void(const std::map<uint32_t, std::string>& response)> ResponseCallback;
 
 
 struct QueueEntry {
-    std::string message;
+    std::shared_ptr<Message> message;
     ResponseCallback callback;
 };
 
 class FixSession {
 public:
-    FixSession(const std::string& access_key, const std::string& access_secret, const std::string& target_comp_id, const std::string& host, int port);
+    FixSession(const std::string& access_key, const std::string& access_secret, const std::string& target_comp_id, const std::string& host, int port,
+               std::chrono::milliseconds timeout = std::chrono::milliseconds::max());
     ~FixSession();
 
     bool logon();
-    void send_message_and_get_reply(const std::string& message, const ResponseCallback& callback);
-    void send_order(const NewOrderSingle& order);
+    void send_message_and_get_reply(const std::shared_ptr<Message>& message, const ResponseCallback& callback);
+    void send_order(const std::shared_ptr<Message>& message);
     void process_response();
     void disconnect();
     bool connect_to_server();
 
-private:
+protected:
     std::string access_key_;
     std::string access_secret_;
     std::string target_comp_id_;
@@ -49,6 +51,8 @@ private:
     bool running_;
     ssize_t seq_num_{1};
 
+    std::chrono::milliseconds timeout_;
+
     void init_server_address();
-    void sender_receiver_loop();
+    virtual void sender_receiver_loop();
 };
