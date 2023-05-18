@@ -1,15 +1,11 @@
 #include "NewOrderSingle.h"
 #include "FixUtil.cpp"
 
-NewOrderSingle::NewOrderSingle(const std::string& clOrdID, char side, double orderQty, double price, const std::string& symbol,
-                               const std::string& execInst, char ordType, char timeInForce, double stopPx,
-                               double maxShow, int qtyType, double pegOffsetValue, int pegPriceType,
-                               const std::string& deribitLabel, char deribitAdvOrderType, bool deribitMMProtection,
-                               int deribitConditionTriggerMethod) {
+NewOrderSingle::NewOrderSingle(const std::string& clOrdID, char side, double orderQty, double price, const std::string& symbol) {
     // Add header fields
     fields_[8] = "FIX.4.4";
     fields_[49] = "client";
-    fields_[56] = "DERIEXEC"; // Assuming Deribit as exchange
+    fields_[56] = std::getenv("FIX_TARGET_COMP_ID")
     fields_[34] = "2";
     fields_[52] = current_utc_time();
 
@@ -20,21 +16,6 @@ NewOrderSingle::NewOrderSingle(const std::string& clOrdID, char side, double ord
     fields_[38] = std::to_string(orderQty);
     fields_[44] = std::to_string(price);
     fields_[55] = symbol;
-
-    if (!execInst.empty()) fields_[18] = execInst;
-    fields_[40] = std::to_string(ordType);
-    fields_[59] = std::to_string(timeInForce);
-
-    if (stopPx > 0) fields_[99] = std::to_string(stopPx);
-    if (maxShow > 0) fields_[210] = std::to_string(maxShow);
-    fields_[854] = std::to_string(qtyType);
-
-    if (pegOffsetValue != 0.0) fields_[211] = std::to_string(pegOffsetValue);
-    if (pegPriceType != 0) fields_[1094] = std::to_string(pegPriceType);
-    if (!deribitLabel.empty()) fields_[100010] = deribitLabel;
-    if (deribitAdvOrderType != '\0') fields_[100012] = std::to_string(deribitAdvOrderType);
-    fields_[9008] = deribitMMProtection ? "Y" : "N";
-    fields_[5127] = std::to_string(deribitConditionTriggerMethod);
 }
 
 std::string NewOrderSingle::to_string() const {
