@@ -5,7 +5,7 @@ NewOrderSingle::NewOrderSingle(const std::string& clOrdID, char side, double ord
     // Add header fields
     fields_[8] = "FIX.4.4";
     fields_[49] = "client";
-    fields_[56] = std::getenv("FIX_TARGET_COMP_ID")
+    fields_[56] = std::getenv("FIX_TARGET_COMP_ID");
     fields_[34] = "2";
     fields_[52] = current_utc_time();
 
